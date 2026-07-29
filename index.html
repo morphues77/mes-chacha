@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>mes.chacha :: secure p2p</title>
+<meta name="description" content="Serverless, end-to-end encrypted peer-to-peer chat running entirely in the browser.">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<div class="app">
+  <div class="titlebar">
+    <span class="path">~/mes.chacha</span>
+    <span class="status off" id="statusText">disconnected</span>
+  </div>
+
+  <div class="screen" id="setupScreen">
+    <div class="setup">
+      <p class="line dim">serverless p2p chat. e2e encrypted with a shared passphrase. no server ever sees message content or the passphrase.</p>
+
+      <div class="banner">
+        agree on a shared passphrase with your peer over a channel you already trust (call, in person). never send it through the same channel as the connection code below.
+      </div>
+
+      <label class="f-label">passphrase</label>
+      <input type="password" id="passphrase" placeholder="shared secret — not transmitted">
+
+      <label class="f-label" style="margin-top:14px;">
+        <input type="checkbox" id="lanOnly" style="width:auto; margin-right:6px; vertical-align:middle;">
+        offline / lan-only mode (no stun — direct local network only)
+      </label>
+
+      <div class="tabs">
+        <button id="tabHost" class="active">host</button>
+        <button id="tabJoin">join</button>
+      </div>
+
+      <div id="hostPane">
+        <div class="section-head">step 1 — create invite</div>
+        <button id="btnCreateOffer">generate_code</button>
+        <p class="line dim" id="hostOfferLabel" style="display:none">send this to your peer:</p>
+        <textarea id="hostOfferOut" rows="4" readonly style="display:none"></textarea>
+        <button id="copyOffer" class="accent" style="display:none">copy</button>
+        <button id="downloadOffer" style="display:none">download_as_file</button>
+        <div id="hostOfferQR" style="margin-top:10px;"></div>
+
+        <div id="hostStep2" style="display:none">
+          <div class="section-head">step 2 — paste reply code</div>
+          <textarea id="hostAnswerIn" rows="4" placeholder="paste reply code here"></textarea>
+          <button id="btnConnectHost">connect</button>
+        </div>
+      </div>
+
+      <div id="joinPane" style="display:none">
+        <div class="section-head">step 1 — paste invite code</div>
+        <textarea id="joinOfferIn" rows="4" placeholder="paste connection code here"></textarea>
+        <button id="btnCreateAnswer">generate_reply</button>
+
+        <div id="joinStep2" style="display:none">
+          <p class="line dim">send this reply code back:</p>
+          <textarea id="joinAnswerOut" rows="4" readonly></textarea>
+          <button id="copyAnswer" class="accent">copy</button>
+          <button id="downloadAnswer">download_as_file</button>
+          <div id="joinAnswerQR" style="margin-top:10px;"></div>
+          <p class="line dim">connection completes automatically once they enter this.</p>
+        </div>
+      </div>
+
+      <div class="adv-toggle" id="advToggle">advanced: custom turn server</div>
+      <div class="adv-panel" id="advPanel">
+        <label class="f-label">turn url</label>
+        <input type="text" id="turnUrl" placeholder="turn:your-server:3478">
+        <label class="f-label">username</label>
+        <input type="text" id="turnUser" placeholder="username">
+        <label class="f-label">credential</label>
+        <input type="password" id="turnPass" placeholder="credential">
+      </div>
+    </div>
+  </div>
+
+  <div class="screen" id="chatScreen" style="display:none">
+    <div class="verify-line">
+      <span>verify (read aloud):</span>
+      <span class="code" id="verifyCode">—</span>
+    </div>
+    <div class="messages" id="messages"></div>
+    <div class="composer">
+      <span class="caret">&gt;</span>
+      <input type="text" id="msgInput" placeholder="type message, press enter" autocomplete="off" maxlength="2000">
+      <button id="btnSend">send</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/qrcode.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>
