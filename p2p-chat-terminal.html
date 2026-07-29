@@ -1,0 +1,629 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>mes.chacha :: secure p2p</title>
+<style>
+  :root {
+    --bg: #0a0c0a;
+    --fg: #baffc9;
+    --fg-dim: #5a7a5f;
+    --fg-bright: #eaffea;
+    --accent: #ffcc66;
+    --danger: #ff6b6b;
+    --border: #2a3a2c;
+    --cursor: #baffc9;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0;
+    height: 100%;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: "SF Mono", "JetBrains Mono", "Fira Code", Consolas, Menlo, monospace;
+    font-size: 13px;
+  }
+  body {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .app {
+    width: 100%;
+    max-width: 520px;
+    height: 100vh;
+    max-height: 900px;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ---- title bar ---- */
+  .titlebar {
+    padding: 6px 12px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--fg-dim);
+    font-size: 11px;
+  }
+  .titlebar .path { color: var(--fg-bright); }
+  .titlebar .status { margin-left: auto; }
+  .titlebar .status.on { color: var(--fg); }
+  .titlebar .status.warn { color: var(--accent); }
+  .titlebar .status.off { color: var(--danger); }
+  .titlebar .status::before { content: "● "; }
+
+  .screen { flex: 1; display: flex; flex-direction: column; overflow: hidden; }
+
+  /* ---- setup / terminal log ---- */
+  .setup { padding: 14px 16px; overflow-y: auto; flex: 1; }
+  .line { margin: 0 0 6px; line-height: 1.5; }
+  .line .prompt { color: var(--accent); }
+  .line.dim { color: var(--fg-dim); }
+  .line.warn { color: var(--accent); }
+  .line.err { color: var(--danger); }
+
+  .section-head {
+    color: var(--fg-bright);
+    margin: 16px 0 6px;
+    font-size: 12px;
+  }
+  .section-head::before { content: "# "; color: var(--fg-dim); }
+
+  label.f-label {
+    display: block;
+    color: var(--fg-dim);
+    font-size: 11px;
+    margin: 10px 0 4px;
+  }
+  label.f-label::before { content: "> "; }
+
+  textarea, input[type=text], input[type=password] {
+    width: 100%;
+    background: #050605;
+    border: 1px solid var(--border);
+    color: var(--fg-bright);
+    padding: 8px 10px;
+    font-family: inherit;
+    font-size: 12px;
+    resize: vertical;
+    outline: none;
+  }
+  textarea:focus, input:focus { border-color: var(--fg); }
+  textarea::placeholder, input::placeholder { color: var(--fg-dim); }
+
+  button {
+    background: transparent;
+    color: var(--fg-bright);
+    border: 1px solid var(--fg-dim);
+    padding: 7px 12px;
+    font-family: inherit;
+    font-size: 12px;
+    cursor: pointer;
+    margin-top: 8px;
+  }
+  button::before { content: "$ "; color: var(--fg-dim); }
+  button:hover:not(:disabled) { border-color: var(--fg); background: #10140f; }
+  button:disabled { opacity: 0.4; cursor: not-allowed; }
+  button.accent { border-color: var(--accent); color: var(--accent); }
+  button.danger-btn { border-color: var(--danger); color: var(--danger); }
+
+  .tabs { display: flex; gap: 0; margin: 14px 0; border: 1px solid var(--border); }
+  .tabs button {
+    flex: 1; margin: 0; border: none; border-right: 1px solid var(--border);
+    background: transparent; color: var(--fg-dim);
+  }
+  .tabs button::before { content: ""; }
+  .tabs button:last-child { border-right: none; }
+  .tabs button.active { background: var(--border); color: var(--fg-bright); }
+
+  .banner {
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 8px 10px;
+    font-size: 11px;
+    margin-bottom: 12px;
+    line-height: 1.5;
+  }
+  .banner::before { content: "[!] "; }
+
+  .adv-toggle {
+    color: var(--fg-dim);
+    font-size: 11px;
+    cursor: pointer;
+    margin: 12px 0 4px;
+    text-decoration: underline;
+  }
+  .adv-toggle::before { content: "+ "; }
+  .adv-panel { display: none; }
+
+  /* ---- chat screen ---- */
+  .verify-line {
+    padding: 8px 14px;
+    border-bottom: 1px solid var(--border);
+    font-size: 11px;
+    color: var(--fg-dim);
+    display: flex;
+    gap: 8px;
+    align-items: baseline;
+    flex-wrap: wrap;
+  }
+  .verify-line .code {
+    color: var(--fg-bright);
+    letter-spacing: 1px;
+    font-size: 13px;
+  }
+
+  .messages {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 14px;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .msg { font-size: 12.5px; line-height: 1.6; white-space: pre-wrap; word-wrap: break-word; }
+  .msg .tag { color: var(--fg-dim); }
+  .msg.me .tag { color: var(--fg-dim); }
+  .msg.me .body { color: var(--fg-bright); }
+  .msg.them .tag { color: var(--fg-dim); }
+  .msg.them .body { color: var(--fg); }
+  .msg.sys { color: var(--fg-dim); font-size: 11px; }
+  .msg.sys::before { content: "-- "; }
+  .msg.tamper { color: var(--danger); font-size: 11.5px; }
+  .msg.tamper::before { content: "!! "; }
+  .msg .time { color: var(--fg-dim); font-size: 10px; margin-left: 6px; }
+
+  .composer {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 12px;
+    border-top: 1px solid var(--border);
+  }
+  .composer .caret { color: var(--accent); }
+  .composer input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    padding: 4px 0;
+  }
+  .composer button { margin: 0; }
+
+  ::-webkit-scrollbar { width: 8px; }
+  ::-webkit-scrollbar-track { background: var(--bg); }
+  ::-webkit-scrollbar-thumb { background: var(--border); }
+</style>
+</head>
+<body>
+<div class="app">
+  <div class="titlebar">
+    <span class="path">~/mes.chacha</span>
+    <span class="status off" id="statusText">disconnected</span>
+  </div>
+
+  <div class="screen" id="setupScreen">
+    <div class="setup">
+      <p class="line dim">serverless p2p chat. e2e encrypted with a shared passphrase. no server ever sees message content or the passphrase.</p>
+
+      <div class="banner">
+        agree on a shared passphrase with your peer over a channel you already trust (call, in person). never send it through the same channel as the connection code below.
+      </div>
+
+      <label class="f-label">passphrase</label>
+      <input type="password" id="passphrase" placeholder="shared secret — not transmitted">
+
+      <label class="f-label" style="margin-top:14px;">
+        <input type="checkbox" id="lanOnly" style="width:auto; margin-right:6px; vertical-align:middle;">
+        offline / lan-only mode (no stun — direct local network only)
+      </label>
+
+      <div class="tabs">
+        <button id="tabHost" class="active">host</button>
+        <button id="tabJoin">join</button>
+      </div>
+
+      <div id="hostPane">
+        <div class="section-head">step 1 — create invite</div>
+        <button id="btnCreateOffer">generate_code</button>
+        <p class="line dim" id="hostOfferLabel" style="display:none">send this to your peer:</p>
+        <textarea id="hostOfferOut" rows="4" readonly style="display:none"></textarea>
+        <button id="copyOffer" class="accent" style="display:none">copy</button>
+        <button id="downloadOffer" style="display:none">download_as_file</button>
+        <div id="hostOfferQR" style="margin-top:10px;"></div>
+
+        <div id="hostStep2" style="display:none">
+          <div class="section-head">step 2 — paste reply code</div>
+          <textarea id="hostAnswerIn" rows="4" placeholder="paste reply code here"></textarea>
+          <button id="btnConnectHost">connect</button>
+        </div>
+      </div>
+
+      <div id="joinPane" style="display:none">
+        <div class="section-head">step 1 — paste invite code</div>
+        <textarea id="joinOfferIn" rows="4" placeholder="paste connection code here"></textarea>
+        <button id="btnCreateAnswer">generate_reply</button>
+
+        <div id="joinStep2" style="display:none">
+          <p class="line dim">send this reply code back:</p>
+          <textarea id="joinAnswerOut" rows="4" readonly></textarea>
+          <button id="copyAnswer" class="accent">copy</button>
+          <button id="downloadAnswer">download_as_file</button>
+          <div id="joinAnswerQR" style="margin-top:10px;"></div>
+          <p class="line dim">connection completes automatically once they enter this.</p>
+        </div>
+      </div>
+
+      <div class="adv-toggle" id="advToggle">advanced: custom turn server</div>
+      <div class="adv-panel" id="advPanel">
+        <label class="f-label">turn url</label>
+        <input type="text" id="turnUrl" placeholder="turn:your-server:3478">
+        <label class="f-label">username</label>
+        <input type="text" id="turnUser" placeholder="username">
+        <label class="f-label">credential</label>
+        <input type="password" id="turnPass" placeholder="credential">
+      </div>
+    </div>
+  </div>
+
+  <div class="screen" id="chatScreen" style="display:none">
+    <div class="verify-line">
+      <span>verify (read aloud):</span>
+      <span class="code" id="verifyCode">—</span>
+    </div>
+    <div class="messages" id="messages"></div>
+    <div class="composer">
+      <span class="caret">&gt;</span>
+      <input type="text" id="msgInput" placeholder="type message, press enter" autocomplete="off" maxlength="2000">
+      <button id="btnSend">send</button>
+    </div>
+  </div>
+</div>
+
+<script>
+//---------------------------------------------------------------------
+// QR Code Generator for JavaScript — Copyright (c) 2009 Kazuhiko Arase
+// MIT license: http://www.opensource.org/licenses/mit-license.php
+// Used here for encode-only QR generation (no external network calls).
+//---------------------------------------------------------------------
+var qrcode=function(){var qrcode=function(typeNumber,errorCorrectionLevel){var PAD0=0xEC,PAD1=0x11,_typeNumber=typeNumber,_errorCorrectionLevel=QRErrorCorrectionLevel[errorCorrectionLevel],_modules=null,_moduleCount=0,_dataCache=null,_dataList=[];var _this={};var makeImpl=function(test,maskPattern){_moduleCount=_typeNumber*4+17;_modules=function(moduleCount){var modules=new Array(moduleCount);for(var row=0;row<moduleCount;row+=1){modules[row]=new Array(moduleCount);for(var col=0;col<moduleCount;col+=1){modules[row][col]=null;}}return modules;}(_moduleCount);setupPositionProbePattern(0,0);setupPositionProbePattern(_moduleCount-7,0);setupPositionProbePattern(0,_moduleCount-7);setupPositionAdjustPattern();setupTimingPattern();setupTypeInfo(test,maskPattern);if(_typeNumber>=7){setupTypeNumber(test);}if(_dataCache==null){_dataCache=createData(_typeNumber,_errorCorrectionLevel,_dataList);}mapData(_dataCache,maskPattern);};var setupPositionProbePattern=function(row,col){for(var r=-1;r<=7;r+=1){if(row+r<=-1||_moduleCount<=row+r)continue;for(var c=-1;c<=7;c+=1){if(col+c<=-1||_moduleCount<=col+c)continue;if((0<=r&&r<=6&&(c==0||c==6))||(0<=c&&c<=6&&(r==0||r==6))||(2<=r&&r<=4&&2<=c&&c<=4)){_modules[row+r][col+c]=true;}else{_modules[row+r][col+c]=false;}}}};var getBestMaskPattern=function(){var minLostPoint=0,pattern=0;for(var i=0;i<8;i+=1){makeImpl(true,i);var lostPoint=QRUtil.getLostPoint(_this);if(i==0||minLostPoint>lostPoint){minLostPoint=lostPoint;pattern=i;}}return pattern;};var setupTimingPattern=function(){for(var r=8;r<_moduleCount-8;r+=1){if(_modules[r][6]!=null)continue;_modules[r][6]=(r%2==0);}for(var c=8;c<_moduleCount-8;c+=1){if(_modules[6][c]!=null)continue;_modules[6][c]=(c%2==0);}};var setupPositionAdjustPattern=function(){var pos=QRUtil.getPatternPosition(_typeNumber);for(var i=0;i<pos.length;i+=1){for(var j=0;j<pos.length;j+=1){var row=pos[i],col=pos[j];if(_modules[row][col]!=null)continue;for(var r=-2;r<=2;r+=1){for(var c=-2;c<=2;c+=1){if(r==-2||r==2||c==-2||c==2||(r==0&&c==0)){_modules[row+r][col+c]=true;}else{_modules[row+r][col+c]=false;}}}}}};var setupTypeNumber=function(test){var bits=QRUtil.getBCHTypeNumber(_typeNumber);for(var i=0;i<18;i+=1){var mod=(!test&&((bits>>i)&1)==1);_modules[Math.floor(i/3)][i%3+_moduleCount-8-3]=mod;}for(var i=0;i<18;i+=1){var mod=(!test&&((bits>>i)&1)==1);_modules[i%3+_moduleCount-8-3][Math.floor(i/3)]=mod;}};var setupTypeInfo=function(test,maskPattern){var data=(_errorCorrectionLevel<<3)|maskPattern,bits=QRUtil.getBCHTypeInfo(data);for(var i=0;i<15;i+=1){var mod=(!test&&((bits>>i)&1)==1);if(i<6){_modules[i][8]=mod;}else if(i<8){_modules[i+1][8]=mod;}else{_modules[_moduleCount-15+i][8]=mod;}}for(var i=0;i<15;i+=1){var mod=(!test&&((bits>>i)&1)==1);if(i<8){_modules[8][_moduleCount-i-1]=mod;}else if(i<9){_modules[8][15-i-1+1]=mod;}else{_modules[8][15-i-1]=mod;}}_modules[_moduleCount-8][8]=(!test);};var mapData=function(data,maskPattern){var inc=-1,row=_moduleCount-1,bitIndex=7,byteIndex=0,maskFunc=QRUtil.getMaskFunction(maskPattern);for(var col=_moduleCount-1;col>0;col-=2){if(col==6)col-=1;while(true){for(var c=0;c<2;c+=1){if(_modules[row][col-c]==null){var dark=false;if(byteIndex<data.length){dark=(((data[byteIndex]>>>bitIndex)&1)==1);}var mask=maskFunc(row,col-c);if(mask){dark=!dark;}_modules[row][col-c]=dark;bitIndex-=1;if(bitIndex==-1){byteIndex+=1;bitIndex=7;}}}row+=inc;if(row<0||_moduleCount<=row){row-=inc;inc=-inc;break;}}}};var createBytes=function(buffer,rsBlocks){var offset=0,maxDcCount=0,maxEcCount=0,dcdata=new Array(rsBlocks.length),ecdata=new Array(rsBlocks.length);for(var r=0;r<rsBlocks.length;r+=1){var dcCount=rsBlocks[r].dataCount,ecCount=rsBlocks[r].totalCount-dcCount;maxDcCount=Math.max(maxDcCount,dcCount);maxEcCount=Math.max(maxEcCount,ecCount);dcdata[r]=new Array(dcCount);for(var i=0;i<dcdata[r].length;i+=1){dcdata[r][i]=0xff&buffer.getBuffer()[i+offset];}offset+=dcCount;var rsPoly=QRUtil.getErrorCorrectPolynomial(ecCount),rawPoly=qrPolynomial(dcdata[r],rsPoly.getLength()-1);var modPoly=rawPoly.mod(rsPoly);ecdata[r]=new Array(rsPoly.getLength()-1);for(var i=0;i<ecdata[r].length;i+=1){var modIndex=i+modPoly.getLength()-ecdata[r].length;ecdata[r][i]=(modIndex>=0)?modPoly.getAt(modIndex):0;}}var totalCodeCount=0;for(var i=0;i<rsBlocks.length;i+=1){totalCodeCount+=rsBlocks[i].totalCount;}var data=new Array(totalCodeCount),index=0;for(var i=0;i<maxDcCount;i+=1){for(var r=0;r<rsBlocks.length;r+=1){if(i<dcdata[r].length){data[index]=dcdata[r][i];index+=1;}}}for(var i=0;i<maxEcCount;i+=1){for(var r=0;r<rsBlocks.length;r+=1){if(i<ecdata[r].length){data[index]=ecdata[r][i];index+=1;}}}return data;};var createData=function(typeNumber,errorCorrectionLevel,dataList){var rsBlocks=QRRSBlock.getRSBlocks(typeNumber,errorCorrectionLevel),buffer=qrBitBuffer();for(var i=0;i<dataList.length;i+=1){var data=dataList[i];buffer.put(data.getMode(),4);buffer.put(data.getLength(),QRUtil.getLengthInBits(data.getMode(),typeNumber));data.write(buffer);}var totalDataCount=0;for(var i=0;i<rsBlocks.length;i+=1){totalDataCount+=rsBlocks[i].dataCount;}if(buffer.getLengthInBits()>totalDataCount*8){throw new Error('code length overflow. ('+buffer.getLengthInBits()+'>'+totalDataCount*8+')');}if(buffer.getLengthInBits()+4<=totalDataCount*8){buffer.put(0,4);}while(buffer.getLengthInBits()%8!=0){buffer.putBit(false);}while(true){if(buffer.getLengthInBits()>=totalDataCount*8){break;}buffer.put(PAD0,8);if(buffer.getLengthInBits()>=totalDataCount*8){break;}buffer.put(PAD1,8);}return createBytes(buffer,rsBlocks);};_this.addData=function(data,mode){mode=mode||'Byte';var newData=null;switch(mode){case'Numeric':newData=qrNumber(data);break;case'Alphanumeric':newData=qrAlphaNum(data);break;case'Byte':newData=qr8BitByte(data);break;case'Kanji':newData=qrKanji(data);break;default:throw'mode:'+mode;}_dataList.push(newData);_dataCache=null;};_this.isDark=function(row,col){if(row<0||_moduleCount<=row||col<0||_moduleCount<=col){throw new Error(row+','+col);}return _modules[row][col];};_this.getModuleCount=function(){return _moduleCount;};_this.make=function(){makeImpl(false,getBestMaskPattern());};_this.createSvgTag=function(cellSize,margin){cellSize=cellSize||2;margin=(typeof margin=='undefined')?cellSize*4:margin;var size=_this.getModuleCount()*cellSize+margin*2,c,mc,r,mr,qrSvg='',rect;rect='l'+cellSize+',0 0,'+cellSize+' -'+cellSize+',0 0,-'+cellSize+'z ';qrSvg+='<svg';qrSvg+=' viewBox="0 0 '+size+' '+size+'"';qrSvg+=' xmlns="http://www.w3.org/2000/svg"';qrSvg+='>';qrSvg+='<rect width="'+size+'" height="'+size+'" fill="#000"/>';qrSvg+='<path d="';for(r=0;r<_this.getModuleCount();r+=1){mr=r*cellSize+margin;for(c=0;c<_this.getModuleCount();c+=1){if(_this.isDark(r,c)){mc=c*cellSize+margin;qrSvg+='M'+mc+','+mr+rect;}}}qrSvg+='" stroke="transparent" fill="#0f0"/>';qrSvg+='</svg>';return qrSvg;};return _this;};qrcode.stringToBytes=function(s){var bytes=[];for(var i=0;i<s.length;i+=1){var c=s.charCodeAt(i);bytes.push(c&0xff);}return bytes;};var QRMode={MODE_NUMBER:1<<0,MODE_ALPHA_NUM:1<<1,MODE_8BIT_BYTE:1<<2,MODE_KANJI:1<<3};var QRErrorCorrectionLevel={L:1,M:0,Q:3,H:2};var QRMaskPattern={PATTERN000:0,PATTERN001:1,PATTERN010:2,PATTERN011:3,PATTERN100:4,PATTERN101:5,PATTERN110:6,PATTERN111:7};var QRUtil=function(){var PATTERN_POSITION_TABLE=[[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50],[6,30,54],[6,32,58],[6,34,62],[6,26,46,66],[6,26,48,70],[6,26,50,74],[6,30,54,78],[6,30,56,82],[6,30,58,86],[6,34,62,90],[6,28,50,72,94],[6,26,50,74,98],[6,30,54,78,102],[6,28,54,80,106],[6,32,58,84,110],[6,30,58,86,114],[6,34,62,90,118],[6,26,50,74,98,122],[6,30,54,78,102,126],[6,26,52,78,104,130],[6,30,56,82,108,134],[6,34,60,86,112,138],[6,30,58,86,114,142],[6,34,62,90,118,146],[6,30,54,78,102,126,150],[6,24,50,76,102,128,154],[6,28,54,80,106,132,158],[6,32,58,84,110,136,162],[6,26,54,82,110,138,166],[6,30,58,86,114,142,170]];var G15=(1<<10)|(1<<8)|(1<<5)|(1<<4)|(1<<2)|(1<<1)|(1<<0),G18=(1<<12)|(1<<11)|(1<<10)|(1<<9)|(1<<8)|(1<<5)|(1<<2)|(1<<0),G15_MASK=(1<<14)|(1<<12)|(1<<10)|(1<<4)|(1<<1);var _this={};var getBCHDigit=function(data){var digit=0;while(data!=0){digit+=1;data>>>=1;}return digit;};_this.getBCHTypeInfo=function(data){var d=data<<10;while(getBCHDigit(d)-getBCHDigit(G15)>=0){d^=(G15<<(getBCHDigit(d)-getBCHDigit(G15)));}return((data<<10)|d)^G15_MASK;};_this.getBCHTypeNumber=function(data){var d=data<<12;while(getBCHDigit(d)-getBCHDigit(G18)>=0){d^=(G18<<(getBCHDigit(d)-getBCHDigit(G18)));}return(data<<12)|d;};_this.getPatternPosition=function(typeNumber){return PATTERN_POSITION_TABLE[typeNumber-1];};_this.getMaskFunction=function(maskPattern){switch(maskPattern){case QRMaskPattern.PATTERN000:return function(i,j){return(i+j)%2==0;};case QRMaskPattern.PATTERN001:return function(i,j){return i%2==0;};case QRMaskPattern.PATTERN010:return function(i,j){return j%3==0;};case QRMaskPattern.PATTERN011:return function(i,j){return(i+j)%3==0;};case QRMaskPattern.PATTERN100:return function(i,j){return(Math.floor(i/2)+Math.floor(j/3))%2==0;};case QRMaskPattern.PATTERN101:return function(i,j){return(i*j)%2+(i*j)%3==0;};case QRMaskPattern.PATTERN110:return function(i,j){return((i*j)%2+(i*j)%3)%2==0;};case QRMaskPattern.PATTERN111:return function(i,j){return((i*j)%3+(i+j)%2)%2==0;};default:throw new Error('bad maskPattern:'+maskPattern);}};_this.getErrorCorrectPolynomial=function(errorCorrectLength){var a=qrPolynomial([1],0);for(var i=0;i<errorCorrectLength;i+=1){a=a.multiply(qrPolynomial([1,QRMath.gexp(i)],0));}return a;};_this.getLengthInBits=function(mode,type){if(1<=type&&type<10){switch(mode){case QRMode.MODE_NUMBER:return 10;case QRMode.MODE_ALPHA_NUM:return 9;case QRMode.MODE_8BIT_BYTE:return 8;case QRMode.MODE_KANJI:return 8;default:throw new Error('mode:'+mode);}}else if(type<27){switch(mode){case QRMode.MODE_NUMBER:return 12;case QRMode.MODE_ALPHA_NUM:return 11;case QRMode.MODE_8BIT_BYTE:return 16;case QRMode.MODE_KANJI:return 10;default:throw new Error('mode:'+mode);}}else if(type<41){switch(mode){case QRMode.MODE_NUMBER:return 14;case QRMode.MODE_ALPHA_NUM:return 13;case QRMode.MODE_8BIT_BYTE:return 16;case QRMode.MODE_KANJI:return 12;default:throw new Error('mode:'+mode);}}else{throw new Error('type:'+type);}};_this.getLostPoint=function(qrcode){var moduleCount=qrcode.getModuleCount(),lostPoint=0;for(var row=0;row<moduleCount;row+=1){for(var col=0;col<moduleCount;col+=1){var sameCount=0,dark=qrcode.isDark(row,col);for(var r=-1;r<=1;r+=1){if(row+r<0||moduleCount<=row+r)continue;for(var c=-1;c<=1;c+=1){if(col+c<0||moduleCount<=col+c)continue;if(r==0&&c==0)continue;if(dark==qrcode.isDark(row+r,col+c)){sameCount+=1;}}}if(sameCount>5){lostPoint+=(3+sameCount-5);}}}for(var row=0;row<moduleCount-1;row+=1){for(var col=0;col<moduleCount-1;col+=1){var count=0;if(qrcode.isDark(row,col))count+=1;if(qrcode.isDark(row+1,col))count+=1;if(qrcode.isDark(row,col+1))count+=1;if(qrcode.isDark(row+1,col+1))count+=1;if(count==0||count==4){lostPoint+=3;}}}for(var row=0;row<moduleCount;row+=1){for(var col=0;col<moduleCount-6;col+=1){if(qrcode.isDark(row,col)&&!qrcode.isDark(row,col+1)&&qrcode.isDark(row,col+2)&&qrcode.isDark(row,col+3)&&qrcode.isDark(row,col+4)&&!qrcode.isDark(row,col+5)&&qrcode.isDark(row,col+6)){lostPoint+=40;}}}for(var col=0;col<moduleCount;col+=1){for(var row=0;row<moduleCount-6;row+=1){if(qrcode.isDark(row,col)&&!qrcode.isDark(row+1,col)&&qrcode.isDark(row+2,col)&&qrcode.isDark(row+3,col)&&qrcode.isDark(row+4,col)&&!qrcode.isDark(row+5,col)&&qrcode.isDark(row+6,col)){lostPoint+=40;}}}var darkCount=0;for(var col=0;col<moduleCount;col+=1){for(var row=0;row<moduleCount;row+=1){if(qrcode.isDark(row,col)){darkCount+=1;}}}var ratio=Math.abs(100*darkCount/moduleCount/moduleCount-50)/5;lostPoint+=ratio*10;return lostPoint;};return _this;}();var QRMath=function(){var EXP_TABLE=new Array(256),LOG_TABLE=new Array(256);for(var i=0;i<8;i+=1){EXP_TABLE[i]=1<<i;}for(var i=8;i<256;i+=1){EXP_TABLE[i]=EXP_TABLE[i-4]^EXP_TABLE[i-5]^EXP_TABLE[i-6]^EXP_TABLE[i-8];}for(var i=0;i<255;i+=1){LOG_TABLE[EXP_TABLE[i]]=i;}var _this={};_this.glog=function(n){if(n<1){throw new Error('glog('+n+')');}return LOG_TABLE[n];};_this.gexp=function(n){while(n<0){n+=255;}while(n>=256){n-=255;}return EXP_TABLE[n];};return _this;}();function qrPolynomial(num,shift){if(typeof num.length=='undefined'){throw new Error(num.length+'/'+shift);}var _num=function(){var offset=0;while(offset<num.length&&num[offset]==0){offset+=1;}var _num=new Array(num.length-offset+shift);for(var i=0;i<num.length-offset;i+=1){_num[i]=num[i+offset];}return _num;}();var _this={};_this.getAt=function(index){return _num[index];};_this.getLength=function(){return _num.length;};_this.multiply=function(e){var num=new Array(_this.getLength()+e.getLength()-1);for(var i=0;i<_this.getLength();i+=1){for(var j=0;j<e.getLength();j+=1){num[i+j]^=QRMath.gexp(QRMath.glog(_this.getAt(i))+QRMath.glog(e.getAt(j)));}}return qrPolynomial(num,0);};_this.mod=function(e){if(_this.getLength()-e.getLength()<0){return _this;}var ratio=QRMath.glog(_this.getAt(0))-QRMath.glog(e.getAt(0));var num=new Array(_this.getLength());for(var i=0;i<_this.getLength();i+=1){num[i]=_this.getAt(i);}for(var i=0;i<e.getLength();i+=1){num[i]^=QRMath.gexp(QRMath.glog(e.getAt(i))+ratio);}return qrPolynomial(num,0).mod(e);};return _this;}var QRRSBlock=function(){var RS_BLOCK_TABLE=[[1,26,19],[1,26,16],[1,26,13],[1,26,9],[1,44,34],[1,44,28],[1,44,22],[1,44,16],[1,70,55],[1,70,44],[2,35,17],[2,35,13],[1,100,80],[2,50,32],[2,50,24],[4,25,9],[1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12],[2,86,68],[4,43,27],[4,43,19],[4,43,15],[2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14],[2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15],[2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13],[2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16],[4,101,81],[1,80,50,4,81,51],[4,50,22,4,51,23],[3,36,12,8,37,13],[2,116,92,2,117,93],[6,58,36,2,59,37],[4,46,20,6,47,21],[7,42,14,4,43,15],[4,133,107],[8,59,37,1,60,38],[8,44,20,4,45,21],[12,33,11,4,34,12],[3,145,115,1,146,116],[4,64,40,5,65,41],[11,36,16,5,37,17],[11,36,12,5,37,13],[5,109,87,1,110,88],[5,65,41,5,66,42],[5,54,24,7,55,25],[11,36,12,7,37,13],[5,122,98,1,123,99],[7,73,45,3,74,46],[15,43,19,2,44,20],[3,45,15,13,46,16],[1,135,107,5,136,108],[10,74,46,1,75,47],[1,50,22,15,51,23],[2,42,14,17,43,15],[5,150,120,1,151,121],[9,69,43,4,70,44],[17,50,22,1,51,23],[2,42,14,19,43,15],[3,141,113,4,142,114],[3,70,44,11,71,45],[17,47,21,4,48,22],[9,39,13,16,40,14],[3,135,107,5,136,108],[3,67,41,13,68,42],[15,54,24,5,55,25],[15,43,15,10,44,16],[4,144,116,4,145,117],[17,68,42],[17,50,22,6,51,23],[19,46,16,6,47,17],[2,139,111,7,140,112],[17,74,46],[7,54,24,16,55,25],[34,37,13],[4,151,121,5,152,122],[4,75,47,14,76,48],[11,54,24,14,55,25],[16,45,15,14,46,16],[6,147,117,4,148,118],[6,73,45,14,74,46],[11,54,24,16,55,25],[30,46,16,2,47,17],[8,132,106,4,133,107],[8,75,47,13,76,48],[7,54,24,22,55,25],[22,45,15,13,46,16],[10,142,114,2,143,115],[19,74,46,4,75,47],[28,50,22,6,51,23],[33,46,16,4,47,17],[8,152,122,4,153,123],[22,73,45,3,74,46],[8,53,23,26,54,24],[12,45,15,28,46,16],[3,147,117,10,148,118],[3,73,45,23,74,46],[4,54,24,31,55,25],[11,45,15,31,46,16],[7,146,116,7,147,117],[21,73,45,7,74,46],[1,53,23,37,54,24],[19,45,15,26,46,16],[5,145,115,10,146,116],[19,75,47,10,76,48],[15,54,24,25,55,25],[23,45,15,25,46,16],[13,145,115,3,146,116],[2,74,46,29,75,47],[42,54,24,1,55,25],[23,45,15,28,46,16],[17,145,115],[10,74,46,23,75,47],[10,54,24,35,55,25],[19,45,15,35,46,16],[17,145,115,1,146,116],[14,74,46,21,75,47],[29,54,24,19,55,25],[11,45,15,46,46,16],[13,145,115,6,146,116],[14,74,46,23,75,47],[44,54,24,7,55,25],[59,46,16,1,47,17],[12,151,121,7,152,122],[12,75,47,26,76,48],[39,54,24,14,55,25],[22,45,15,41,46,16],[6,151,121,14,152,122],[6,75,47,34,76,48],[46,54,24,10,55,25],[2,45,15,64,46,16],[17,152,122,4,153,123],[29,74,46,14,75,47],[49,54,24,10,55,25],[24,45,15,46,46,16],[4,152,122,18,153,123],[13,74,46,32,75,47],[48,54,24,14,55,25],[42,45,15,32,46,16],[20,147,117,4,148,118],[40,75,47,7,76,48],[43,54,24,22,55,25],[10,45,15,67,46,16],[19,148,118,6,149,119],[18,75,47,31,76,48],[34,54,24,34,55,25],[20,45,15,61,46,16]];var qrRSBlock=function(totalCount,dataCount){var _this={};_this.totalCount=totalCount;_this.dataCount=dataCount;return _this;};var _this={};var getRsBlockTable=function(typeNumber,errorCorrectionLevel){switch(errorCorrectionLevel){case QRErrorCorrectionLevel.L:return RS_BLOCK_TABLE[(typeNumber-1)*4+0];case QRErrorCorrectionLevel.M:return RS_BLOCK_TABLE[(typeNumber-1)*4+1];case QRErrorCorrectionLevel.Q:return RS_BLOCK_TABLE[(typeNumber-1)*4+2];case QRErrorCorrectionLevel.H:return RS_BLOCK_TABLE[(typeNumber-1)*4+3];default:return undefined;}};_this.getRSBlocks=function(typeNumber,errorCorrectionLevel){var rsBlock=getRsBlockTable(typeNumber,errorCorrectionLevel);if(typeof rsBlock=='undefined'){throw new Error('bad rs block @ typeNumber:'+typeNumber+'/errorCorrectionLevel:'+errorCorrectionLevel);}var length=rsBlock.length/3;var list=[];for(var i=0;i<length;i+=1){var count=rsBlock[i*3+0],totalCount=rsBlock[i*3+1],dataCount=rsBlock[i*3+2];for(var j=0;j<count;j+=1){list.push(qrRSBlock(totalCount,dataCount));}}return list;};return _this;}();var qrBitBuffer=function(){var _buffer=[],_length=0;var _this={};_this.getBuffer=function(){return _buffer;};_this.getAt=function(index){var bufIndex=Math.floor(index/8);return((_buffer[bufIndex]>>>(7-index%8))&1)==1;};_this.put=function(num,length){for(var i=0;i<length;i+=1){_this.putBit(((num>>>(length-i-1))&1)==1);}};_this.getLengthInBits=function(){return _length;};_this.putBit=function(bit){var bufIndex=Math.floor(_length/8);if(_buffer.length<=bufIndex){_buffer.push(0);}if(bit){_buffer[bufIndex]|=(0x80>>>(_length%8));}_length+=1;};return _this;};var qrNumber=function(data){var _mode=QRMode.MODE_NUMBER,_data=data;var _this={};_this.getMode=function(){return _mode;};_this.getLength=function(buffer){return _data.length;};_this.write=function(buffer){var data=_data,i=0;while(i+2<data.length){buffer.put(strToNum(data.substring(i,i+3)),10);i+=3;}if(i<data.length){if(data.length-i==1){buffer.put(strToNum(data.substring(i,i+1)),4);}else if(data.length-i==2){buffer.put(strToNum(data.substring(i,i+2)),7);}}};var strToNum=function(s){var num=0;for(var i=0;i<s.length;i+=1){num=num*10+chatToNum(s.charAt(i));}return num;};var chatToNum=function(c){if('0'<=c&&c<='9'){return c.charCodeAt(0)-'0'.charCodeAt(0);}throw'illegal char :'+c;};return _this;};var qrAlphaNum=function(data){var _mode=QRMode.MODE_ALPHA_NUM,_data=data;var _this={};_this.getMode=function(){return _mode;};_this.getLength=function(buffer){return _data.length;};_this.write=function(buffer){var s=_data,i=0;while(i+1<s.length){buffer.put(getCode(s.charAt(i))*45+getCode(s.charAt(i+1)),11);i+=2;}if(i<s.length){buffer.put(getCode(s.charAt(i)),6);}};var getCode=function(c){if('0'<=c&&c<='9'){return c.charCodeAt(0)-'0'.charCodeAt(0);}else if('A'<=c&&c<='Z'){return c.charCodeAt(0)-'A'.charCodeAt(0)+10;}else{switch(c){case' ':return 36;case'$':return 37;case'%':return 38;case'*':return 39;case'+':return 40;case'-':return 41;case'.':return 42;case'/':return 43;case':':return 44;default:throw'illegal char :'+c;}}};return _this;};var qr8BitByte=function(data){var _mode=QRMode.MODE_8BIT_BYTE,_data=data,_bytes=qrcode.stringToBytes(data);var _this={};_this.getMode=function(){return _mode;};_this.getLength=function(buffer){return _bytes.length;};_this.write=function(buffer){for(var i=0;i<_bytes.length;i+=1){buffer.put(_bytes[i],8);}};return _this;};var qrKanji=function(data){var _mode=QRMode.MODE_KANJI,_data=data,_bytes=qrcode.stringToBytes(data);var _this={};_this.getMode=function(){return _mode;};_this.getLength=function(buffer){return~~(_bytes.length/2);};_this.write=function(buffer){var data=_bytes,i=0;while(i+1<data.length){var c=((0xff&data[i])<<8)|(0xff&data[i+1]);if(0x8140<=c&&c<=0x9FFC){c-=0x8140;}else if(0xE040<=c&&c<=0xEBBF){c-=0xC140;}else{throw'illegal char at '+(i+1)+'/'+c;}c=((c>>>8)&0xff)*0xC0+(c&0xff);buffer.put(c,13);i+=2;}if(i<data.length){throw'illegal char at '+(i+1);}};return _this;};return qrcode;}();
+
+let pc, dc;
+let aesKey = null;
+let localSalt = null;
+let remoteSalt = null;
+
+const statusText = document.getElementById('statusText');
+const setupScreen = document.getElementById('setupScreen');
+const chatScreen = document.getElementById('chatScreen');
+const messagesEl = document.getElementById('messages');
+const verifyCodeEl = document.getElementById('verifyCode');
+
+function setStatus(state, text) {
+  statusText.className = 'status ' + (state === 'connected' ? 'on' : state === 'warn' ? 'warn' : 'off');
+  statusText.textContent = text;
+}
+
+function addMessage(text, type) {
+  const div = document.createElement('div');
+  div.className = 'msg ' + type;
+  const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+  if (type === 'sys' || type === 'tamper') {
+    div.textContent = text;
+  } else {
+    const tag = type === 'me' ? 'you>' : 'peer>';
+    div.innerHTML = '<span class="tag">' + tag + '</span> <span class="body">' + escapeHtml(text) + '</span><span class="time">' + time + '</span>';
+  }
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function escapeHtml(str) {
+  const d = document.createElement('div');
+  d.textContent = str;
+  return d.innerHTML;
+}
+
+// ---------- Crypto helpers ----------
+const enc = new TextEncoder();
+const dec = new TextDecoder();
+
+function randomBytes(n) {
+  const b = new Uint8Array(n);
+  crypto.getRandomValues(b);
+  return b;
+}
+function bufToB64(buf) { return btoa(String.fromCharCode(...new Uint8Array(buf))); }
+function b64ToBuf(b64) {
+  const bin = atob(b64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+  return arr;
+}
+function compareBytes(a, b) {
+  for (let i = 0; i < Math.min(a.length, b.length); i++) {
+    if (a[i] !== b[i]) return a[i] - b[i];
+  }
+  return a.length - b.length;
+}
+function orderedSalts(saltA, saltB) {
+  const [first, second] = compareBytes(saltA, saltB) <= 0 ? [saltA, saltB] : [saltB, saltA];
+  const combined = new Uint8Array(first.length + second.length);
+  combined.set(first, 0);
+  combined.set(second, first.length);
+  return combined;
+}
+
+async function deriveKey(passphrase, saltA, saltB) {
+  const combined = orderedSalts(saltA, saltB);
+  const baseKey = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: combined, iterations: 250000, hash: 'SHA-256' },
+    baseKey,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptMessage(plaintext) {
+  const iv = randomBytes(12);
+  const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, aesKey, enc.encode(plaintext));
+  return JSON.stringify({ iv: bufToB64(iv), ct: bufToB64(ct) });
+}
+async function decryptMessage(payload) {
+  const { iv, ct } = JSON.parse(payload);
+  const pt = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: b64ToBuf(iv) }, aesKey, b64ToBuf(ct));
+  return dec.decode(pt);
+}
+
+const VERIFY_EMOJI = ['🍎','🍋','🍇','🍉','🍓','🍒','🍑','🥝','🍍','🥑','🌽','🥕','🍄','🌶️','🥦','🧄'];
+
+async function computeVerifyCode(passphrase, saltA, saltB) {
+  const combined = orderedSalts(saltA, saltB);
+  const baseKey = await crypto.subtle.importKey('raw', enc.encode(passphrase), 'PBKDF2', false, ['deriveKey']);
+  const tagKey = await crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: combined, iterations: 250000, hash: 'SHA-256' },
+    baseKey, { name: 'HMAC', hash: 'SHA-256', length: 256 }, false, ['sign']
+  );
+  const tagBits = new Uint8Array(await crypto.subtle.sign('HMAC', tagKey, enc.encode('meschacha-verify-v1')));
+  const digits = String(tagBits[0] % 100).padStart(2,'0') + '-' + String(tagBits[1] % 100).padStart(2,'0');
+  const emojis = VERIFY_EMOJI[tagBits[2] % VERIFY_EMOJI.length]
+               + VERIFY_EMOJI[tagBits[3] % VERIFY_EMOJI.length]
+               + VERIFY_EMOJI[tagBits[4] % VERIFY_EMOJI.length];
+  return digits + '   ' + emojis;
+}
+
+// ---------- WebRTC ----------
+function getIceServers() {
+  const lanOnly = document.getElementById('lanOnly').checked;
+  const servers = lanOnly ? [] : [{ urls: 'stun:stun.l.google.com:19302' }];
+  const turnUrl = document.getElementById('turnUrl').value.trim();
+  const turnUser = document.getElementById('turnUser').value.trim();
+  const turnPass = document.getElementById('turnPass').value.trim();
+  // In LAN-only mode a TURN server is still allowed if it's reachable on
+  // the local network itself (e.g. a coturn instance on the same LAN) —
+  // it's the public STUN lookup specifically that requires internet.
+  if (turnUrl) servers.push({ urls: turnUrl, username: turnUser, credential: turnPass });
+  return servers;
+}
+
+// ---------- QR + offline file transfer helpers ----------
+function renderQR(containerId, text) {
+  const el = document.getElementById(containerId);
+  el.innerHTML = '';
+  try {
+    const qr = qrcode(0, 'L'); // typeNumber 0 = auto-select smallest version that fits
+    qr.addData(text);
+    qr.make();
+    el.innerHTML = qr.createSvgTag(3, 8);
+    const label = document.createElement('p');
+    label.className = 'line dim';
+    label.style.marginTop = '4px';
+    label.textContent = 'scan with peer\'s camera app, or use download_as_file below';
+    el.appendChild(label);
+  } catch (e) {
+    el.innerHTML = '<p class="line warn">code too large for a single QR — use download_as_file below and transfer it via USB, Bluetooth, or AirDrop instead.</p>';
+  }
+}
+
+function downloadAsFile(text, filename) {
+  const blob = new Blob([text], { type: 'text/plain' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function createPeerConnection() {
+  const conn = new RTCPeerConnection({ iceServers: getIceServers() });
+  conn.onconnectionstatechange = () => {
+    if (conn.connectionState === 'connected') {
+      setStatus('connected', 'connected // e2e');
+    } else if (['disconnected','failed','closed'].includes(conn.connectionState)) {
+      setStatus('bad', 'disconnected');
+    }
+  };
+  return conn;
+}
+
+function setupDataChannelEvents(channel) {
+  channel.onopen = async () => {
+    setupScreen.style.display = 'none';
+    chatScreen.style.display = 'flex';
+    setStatus('connected', 'connected // e2e');
+    addMessage('transport connected. deriving e2e key from passphrase...', 'sys');
+
+    const passphrase = document.getElementById('passphrase').value;
+    if (!passphrase) {
+      addMessage('no passphrase set — transport encryption only, no peer auth. reload and set one for full protection.', 'tamper');
+      setStatus('warn', 'connected // unverified');
+      return;
+    }
+    aesKey = await deriveKey(passphrase, localSalt, remoteSalt);
+    verifyCodeEl.textContent = await computeVerifyCode(passphrase, localSalt, remoteSalt);
+    addMessage('key established. compare the verify code above out loud — mismatch means possible interception.', 'sys');
+  };
+  channel.onclose = () => setStatus('bad', 'disconnected');
+  channel.onmessage = async (e) => {
+    if (!aesKey) {
+      addMessage('[unencrypted message received — no shared key]', 'tamper');
+      return;
+    }
+    try {
+      const plaintext = await decryptMessage(e.data);
+      addMessage(plaintext, 'them');
+    } catch (err) {
+      addMessage('message failed authentication and was discarded — mismatched passphrase or tampering.', 'tamper');
+    }
+  };
+}
+
+async function waitForIceGathering(conn) {
+  return new Promise(resolve => {
+    if (conn.iceGatheringState === 'complete') { resolve(); return; }
+    function check() {
+      if (conn.iceGatheringState === 'complete') {
+        conn.removeEventListener('icegatheringstatechange', check);
+        resolve();
+      }
+    }
+    conn.addEventListener('icegatheringstatechange', check);
+  });
+}
+
+function requirePassphrase() {
+  if (!document.getElementById('passphrase').value) {
+    return confirm('no passphrase set — session relies on transport encryption only, no peer auth or message-layer encryption. continue anyway?');
+  }
+  return true;
+}
+
+// ---- HOST FLOW ----
+document.getElementById('btnCreateOffer').onclick = async () => {
+  if (!requirePassphrase()) return;
+  localSalt = randomBytes(16);
+
+  pc = createPeerConnection();
+  dc = pc.createDataChannel('chat');
+  setupDataChannelEvents(dc);
+
+  const offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+  await waitForIceGathering(pc);
+
+  const payload = btoa(JSON.stringify({ desc: pc.localDescription, salt: bufToB64(localSalt) }));
+  document.getElementById('hostOfferOut').value = payload;
+  document.getElementById('hostOfferLabel').style.display = 'block';
+  document.getElementById('hostOfferOut').style.display = 'block';
+  document.getElementById('copyOffer').style.display = 'inline-block';
+  document.getElementById('downloadOffer').style.display = 'inline-block';
+  document.getElementById('hostStep2').style.display = 'block';
+  renderQR('hostOfferQR', payload);
+};
+
+document.getElementById('downloadOffer').onclick = () => {
+  downloadAsFile(document.getElementById('hostOfferOut').value, 'meschacha-invite-code.txt');
+};
+
+document.getElementById('copyOffer').onclick = () => {
+  navigator.clipboard.writeText(document.getElementById('hostOfferOut').value);
+  document.getElementById('copyOffer').textContent = 'copied';
+  setTimeout(() => document.getElementById('copyOffer').textContent = 'copy', 1500);
+};
+
+document.getElementById('btnConnectHost').onclick = async () => {
+  try {
+    const raw = document.getElementById('hostAnswerIn').value.trim();
+    const parsed = JSON.parse(atob(raw));
+    remoteSalt = b64ToBuf(parsed.salt);
+    await pc.setRemoteDescription(parsed.desc);
+  } catch (e) {
+    alert('invalid code — check you pasted the full reply code.');
+  }
+};
+
+// ---- JOIN FLOW ----
+document.getElementById('btnCreateAnswer').onclick = async () => {
+  if (!requirePassphrase()) return;
+  try {
+    localSalt = randomBytes(16);
+
+    const raw = document.getElementById('joinOfferIn').value.trim();
+    const parsed = JSON.parse(atob(raw));
+    remoteSalt = b64ToBuf(parsed.salt);
+
+    pc = createPeerConnection();
+    pc.ondatachannel = (e) => { dc = e.channel; setupDataChannelEvents(dc); };
+
+    await pc.setRemoteDescription(parsed.desc);
+    const answer = await pc.createAnswer();
+    await pc.setLocalDescription(answer);
+    await waitForIceGathering(pc);
+
+    const payload = btoa(JSON.stringify({ desc: pc.localDescription, salt: bufToB64(localSalt) }));
+    document.getElementById('joinAnswerOut').value = payload;
+    document.getElementById('joinStep2').style.display = 'block';
+    renderQR('joinAnswerQR', payload);
+  } catch (e) {
+    alert('invalid code — check you pasted the full invite code.');
+  }
+};
+
+document.getElementById('downloadAnswer').onclick = () => {
+  downloadAsFile(document.getElementById('joinAnswerOut').value, 'meschacha-reply-code.txt');
+};
+
+document.getElementById('copyAnswer').onclick = () => {
+  navigator.clipboard.writeText(document.getElementById('joinAnswerOut').value);
+  document.getElementById('copyAnswer').textContent = 'copied';
+  setTimeout(() => document.getElementById('copyAnswer').textContent = 'copy', 1500);
+};
+
+// ---- TABS ----
+document.getElementById('tabHost').onclick = () => {
+  document.getElementById('tabHost').classList.add('active');
+  document.getElementById('tabJoin').classList.remove('active');
+  document.getElementById('hostPane').style.display = 'block';
+  document.getElementById('joinPane').style.display = 'none';
+};
+document.getElementById('tabJoin').onclick = () => {
+  document.getElementById('tabJoin').classList.add('active');
+  document.getElementById('tabHost').classList.remove('active');
+  document.getElementById('joinPane').style.display = 'block';
+  document.getElementById('hostPane').style.display = 'none';
+};
+
+document.getElementById('advToggle').onclick = () => {
+  const p = document.getElementById('advPanel');
+  p.style.display = p.style.display === 'block' ? 'none' : 'block';
+};
+
+// ---- CHAT ----
+async function sendMessage() {
+  const input = document.getElementById('msgInput');
+  const text = input.value.trim();
+  if (!text || !dc || dc.readyState !== 'open') return;
+  if (aesKey) {
+    dc.send(await encryptMessage(text));
+  } else {
+    dc.send(text);
+  }
+  addMessage(text, 'me');
+  input.value = '';
+}
+document.getElementById('btnSend').onclick = sendMessage;
+document.getElementById('msgInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') sendMessage();
+});
+</script>
+</body>
+</html>
