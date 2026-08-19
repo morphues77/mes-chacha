@@ -6,8 +6,6 @@ connect directly via WebRTC, authenticate each other with a shared
 passphrase, and chat with AES-256-GCM encryption layered on top of WebRTC's
 own DTLS transport encryption.
 
-**[Live demo](#)** ← replace with your GitHub Pages URL once deployed
-
 ## How it works
 
 1. Both people agree on a shared passphrase beforehand, over a channel they
@@ -57,13 +55,6 @@ mes-chacha/
 └── LICENSE
 ```
 
-## Deploying with GitHub Pages
-
-1. Push this repo to GitHub.
-2. Repo → **Settings → Pages** → set source to the `main` branch, root
-   folder.
-3. Your app will be live at `https://<username>.github.io/<repo-name>/`.
-
 ## Known limitations
 
 - **No TURN server included.** Works well on most home/mobile networks via
@@ -75,9 +66,8 @@ mes-chacha/
 - **Two people only** — this is peer-to-peer, not a group chat.
 - **No identity system.** Security relies entirely on both sides knowing the
   same passphrase and verifying the on-screen code together. This is not
-  designed for anonymity or use against a well-resourced adversary — see
-  [Security model](#security-model) below.
-
+  designed for anonymity or use against a well-resourced adversary\
+  
 ## Security model
 
 - Transport encryption via WebRTC's built-in DTLS (automatic).
