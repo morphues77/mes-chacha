@@ -16,8 +16,6 @@ directly via **WebRTC**, authenticate each other with a shared passphrase,
 and exchange messages secured by **AES-256-GCM** layered on top of WebRTC's
 own DTLS transport encryption.
 
-**[Live demo](#)** ← replace with your GitHub Pages URL once deployed
-
 ---
 
 ## 🖥️ How It Works
@@ -88,14 +86,6 @@ python3 -m http.server 8000
 **HTTPS is required** for clipboard copy and reliable WebRTC behavior beyond
 `localhost` — for real deployment, use GitHub Pages or any static host that
 provides HTTPS.
-
----
-
-## 🚀 Deploying with GitHub Pages
-
-1. Push this repo to GitHub.
-2. Repo → **Settings → Pages** → set source to the `main` branch, root folder.
-3. Your app will be live at `https://<username>.github.io/<repo-name>/`.
 
 ---
 
